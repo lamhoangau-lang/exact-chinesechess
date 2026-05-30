@@ -156,6 +156,13 @@ bitboard_h.write_text(src)
 print("Patches applied.")
 PYEOF
 
+# ── 2b. Force vfpv3 (no NEON) ───────────────────────────────────────────────
+# Pikafish's armv7 preset forces -mfpu=neon, which lets GCC emit NEON loads
+# that fault (SIGSEGV) in the NNUE path on the PW3's i.MX6 SoloLite. vfpv3 is
+# exactly the FPU KOReader targets for kindlepw2, so it is known-good here.
+echo "Forcing -mfpu=vfpv3 (dropping NEON) ..."
+sed -i 's/-mfpu=neon/-mfpu=vfpv3/g' "$PIKAFISH_SRC/src/Makefile"
+
 # ── 3. Build (static) ───────────────────────────────────────────────────────
 mkdir -p "$OUT_DIR"
 echo "Building Pikafish ARCH=$ARCH (static) with kindlepw2 ..."
