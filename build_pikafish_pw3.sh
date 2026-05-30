@@ -47,6 +47,18 @@ echo "Using cross compiler: $($CXX --version | head -n 1)"
     exit 1
 }
 
+# ── 1b. Match engine to the current NNUE ────────────────────────────────────
+# The repo pins an older Pikafish commit, but net.sh always downloads the
+# rolling "master-net", whose architecture hash no longer matches that old
+# commit -> the engine refuses the net ("...compatible with the engine must be
+# available"). Updating to the latest master keeps engine and master-net in
+# sync (they are released together), so the net loads.
+echo "Updating Pikafish to latest master (to match master-net) ..."
+git -C "$PIKAFISH_SRC" fetch --depth 1 origin master
+git -C "$PIKAFISH_SRC" checkout -q FETCH_HEAD
+git -C "$PIKAFISH_SRC" reset --hard -q FETCH_HEAD
+echo "Pikafish now at: $(git -C "$PIKAFISH_SRC" rev-parse --short HEAD)"
+
 # ── 2. ARM32 source patches (idempotent) ───────────────────────────────────
 echo "Applying ARM32 patches ..."
 python3 - "$PIKAFISH_SRC" <<'PYEOF'
