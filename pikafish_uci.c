@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 static void write_line(PikafishUci *engine, const char *line) {
     gchar *message;
