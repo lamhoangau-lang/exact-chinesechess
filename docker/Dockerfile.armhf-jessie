@@ -13,13 +13,16 @@ FROM arm32v7/debian:jessie
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Jessie is end-of-life: packages live on archive.debian.org, the Release
-# Valid-Until has expired, and the archive signing key has expired too.
-# [trusted=yes] + Check-Valid-Until false + --allow-unauthenticated let apt
-# use the archive anyway. The security suite is dropped (not needed and the
-# path often 404s).
+# Valid-Until has expired, and the archive signing keys have expired too.
+# Keep BOTH the main and security suites so apt can satisfy the versions that
+# are already baked into the base image; [trusted=yes] + Check-Valid-Until
+# false + --allow-unauthenticated let apt use the expired archive anyway.
+# librsvg2-dev is intentionally NOT installed: this app uses PNG assets only.
 RUN set -eux; \
-    echo 'deb [trusted=yes] http://archive.debian.org/debian/ jessie main' \
-        > /etc/apt/sources.list; \
+    { \
+        echo 'deb [trusted=yes] http://archive.debian.org/debian/ jessie main'; \
+        echo 'deb [trusted=yes] http://archive.debian.org/debian-security jessie/updates main'; \
+    } > /etc/apt/sources.list; \
     echo 'Acquire::Check-Valid-Until "false";' \
         > /etc/apt/apt.conf.d/99no-check-valid-until; \
     apt-get update; \
@@ -29,7 +32,6 @@ RUN set -eux; \
         file \
         libcairo2-dev \
         libgtk2.0-dev \
-        librsvg2-dev \
         make \
         pkg-config \
         python3 \
