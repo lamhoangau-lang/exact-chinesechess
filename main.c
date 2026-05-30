@@ -559,15 +559,32 @@ static void load_cb(GtkWidget *widget, gpointer data) {
     maybe_schedule_ai();
 }
 
-static void mode_changed_cb(GtkComboBox *combo, gpointer data) {
+static const char *level_name(XiangqiAiLevel level) {
+    switch (level) {
+    case XIANGQI_AI_EASY:
+        return "Easy";
+    case XIANGQI_AI_MEDIUM:
+        return "Medium";
+    case XIANGQI_AI_HARD:
+        return "Hard";
+    }
+    return "Medium";
+}
+
+/* Kindle's e-ink window manager makes GtkComboBox drop-downs snap shut the
+ * instant they open, so the Mode/Level selectors are plain buttons that cycle
+ * through the choices on each tap instead. */
+static void mode_cycle_cb(GtkWidget *button, gpointer data) {
     (void)data;
-    app.mode = (AppMode)gtk_combo_box_get_active(combo);
+    app.mode = (AppMode)(((int)app.mode + 1) % 4);
+    gtk_button_set_label(GTK_BUTTON(button), mode_name(app.mode));
     new_game();
 }
 
-static void level_changed_cb(GtkComboBox *combo, gpointer data) {
+static void level_cycle_cb(GtkWidget *button, gpointer data) {
     (void)data;
-    app.level = (XiangqiAiLevel)gtk_combo_box_get_active(combo);
+    app.level = (XiangqiAiLevel)(((int)app.level + 1) % 3);
+    gtk_button_set_label(GTK_BUTTON(button), level_name(app.level));
     pikafish_uci_set_difficulty(&app.pikafish, app.level);
     maybe_schedule_ai();
     update_ui();
@@ -1054,31 +1071,6 @@ static void update_ui(void) {
     gtk_widget_queue_draw(app.board);
 }
 
-static gboolean combo_button_press_cb(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    (void)data;
-
-    if (event->type != GDK_BUTTON_PRESS || event->button != 1) {
-        return FALSE;
-    }
-
-    gtk_widget_grab_focus(widget);
-    gtk_combo_box_popup(GTK_COMBO_BOX(widget));
-    return TRUE;
-}
-
-static GtkWidget *make_combo(const char **items, int count, int active) {
-    GtkWidget *combo = gtk_combo_box_new_text();
-    int i;
-    for (i = 0; i < count; i++) {
-        gtk_combo_box_append_text(GTK_COMBO_BOX(combo), items[i]);
-    }
-    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
-    app_apply_high_contrast(combo);
-    gtk_widget_add_events(combo, GDK_BUTTON_PRESS_MASK);
-    g_signal_connect(combo, "button-press-event", G_CALLBACK(combo_button_press_cb), NULL);
-    return combo;
-}
-
 static void add_button(GtkWidget *box, const char *label, GCallback callback) {
     GtkWidget *button = gtk_button_new_with_label(label);
     gtk_box_pack_start(GTK_BOX(box), button, TRUE, TRUE, 0);
@@ -1113,8 +1105,6 @@ int main(int argc, char **argv) {
     GtkWidget *history_frame;
     GtkWidget *history_scroll;
     GtkWidget *history_nav;
-    const char *modes[] = { "Play Red", "Play Black", "2 Player", "AI Demo" };
-    const char *levels[] = { "Easy", "Medium", "Hard" };
 
     gtk_init(&argc, &argv);
     app_install_kindle_style();
@@ -1158,9 +1148,13 @@ int main(int argc, char **argv) {
 
     settings = gtk_hbox_new(FALSE, 12);
     gtk_box_pack_start(GTK_BOX(vbox), settings, FALSE, FALSE, 0);
-    app.mode_combo = make_combo(modes, 4, app.mode);
+    app.mode_combo = gtk_button_new_with_label(mode_name(app.mode));
+    app_apply_high_contrast(app.mode_combo);
+    g_signal_connect(app.mode_combo, "clicked", G_CALLBACK(mode_cycle_cb), NULL);
     labeled_combo(settings, "Mode", app.mode_combo);
-    app.level_combo = make_combo(levels, 3, app.level);
+    app.level_combo = gtk_button_new_with_label(level_name(app.level));
+    app_apply_high_contrast(app.level_combo);
+    g_signal_connect(app.level_combo, "clicked", G_CALLBACK(level_cycle_cb), NULL);
     labeled_combo(settings, "Level", app.level_combo);
     app.moves_label = gtk_label_new("Moves: 0");
     gtk_box_pack_start(GTK_BOX(settings), app.moves_label, FALSE, FALSE, 8);
@@ -1203,8 +1197,6 @@ int main(int argc, char **argv) {
     app.history_next_button = add_history_button(history_nav, ">", G_CALLBACK(history_next_cb));
     app.history_latest_button = add_history_button(history_nav, ">|", G_CALLBACK(history_latest_cb));
 
-    g_signal_connect(app.mode_combo, "changed", G_CALLBACK(mode_changed_cb), NULL);
-    g_signal_connect(app.level_combo, "changed", G_CALLBACK(level_changed_cb), NULL);
 
     app_log("starting exact-chinesechess");
     {
