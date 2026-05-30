@@ -1,37 +1,29 @@
 # Build image for Kindle Paperwhite 3 (Wario, kernel 3.0.35) and other
 # legacy Kindles.
 #
-# WHY THIS EXISTS
-# ---------------
-# The stock build uses arm32v7/debian:bullseye. Bullseye ships glibc 2.31,
-# which is compiled with a minimum supported Linux kernel of 3.2. The PW3
-# runs Linux 3.0.35, so glibc aborts at startup with "FATAL: kernel too old"
-# before the app even runs.
+# Debian Jessie ships glibc 2.19 (minimum kernel 2.6.32 <= 3.0.35), so the
+# app and the bundled loader/libs copied out of this container start fine on
+# the PW3, unlike the stock Bullseye build (glibc 2.31, min kernel 3.2).
 #
-# Debian Jessie ships glibc 2.19, built with a minimum kernel of 2.6.32, which
-# is <= 3.0.35, so binaries (and the bundled loader/libs copied out of this
-# container) start fine on the PW3.
-#
-# NOTE: Jessie's GCC is 4.9, which is too old to compile modern Pikafish
-# (needs C++17). Build the app WITHOUT Pikafish here; the app automatically
-# falls back to its built-in easy/medium/hard AI. To keep Pikafish, use the
-# koxtoolchain "kindlepw2" toolchain instead (modern GCC + glibc 2.12).
+# NOTE: Jessie's GCC 4.9 is too old for modern Pikafish (C++17), so the app is
+# built WITHOUT Pikafish and falls back to its built-in AI.
 
 FROM arm32v7/debian:jessie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Jessie is end-of-life; its packages live on archive.debian.org and the
-# Valid-Until check must be disabled.
+# Jessie is end-of-life: packages live on archive.debian.org, the Release
+# Valid-Until has expired, and the archive signing key has expired too.
+# [trusted=yes] + Check-Valid-Until false + --allow-unauthenticated let apt
+# use the archive anyway. The security suite is dropped (not needed and the
+# path often 404s).
 RUN set -eux; \
-    printf '%s\n' \
-      'deb http://archive.debian.org/debian/ jessie main' \
-      'deb http://archive.debian.org/debian-security jessie/updates main' \
-      > /etc/apt/sources.list; \
-    printf 'Acquire::Check-Valid-Until "false";\n' \
-      > /etc/apt/apt.conf.d/99no-check-valid-until; \
-    apt-get -o Acquire::Check-Valid-Until=false update; \
-    apt-get install -y --no-install-recommends \
+    echo 'deb [trusted=yes] http://archive.debian.org/debian/ jessie main' \
+        > /etc/apt/sources.list; \
+    echo 'Acquire::Check-Valid-Until "false";' \
+        > /etc/apt/apt.conf.d/99no-check-valid-until; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends --allow-unauthenticated \
         build-essential \
         ca-certificates \
         file \
