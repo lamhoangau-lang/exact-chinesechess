@@ -1,0 +1,63 @@
+name: build-pw3
+
+# Builds a Kindle Paperwhite 3 (kernel 3.0.35) compatible package.
+# Run it from the Actions tab ("Run workflow"); download the zip from the
+# run's Artifacts section when it finishes. No local Linux/Docker needed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no Pikafish submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Enable ARM emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Build the Jessie (old-glibc) ARM image
+        run: |
+          docker build \
+            --platform linux/arm/v7 \
+            -t exact-chinesechess-armhf-build:jessie \
+            -f docker/Dockerfile.armhf-jessie \
+            docker
+
+      - name: Start a persistent builder container
+        run: |
+          docker run -d \
+            --platform linux/arm/v7 \
+            --name exact-chinesechess-armhf-builder \
+            -v "$PWD":/src/exact-chinesechess \
+            -w /src/exact-chinesechess \
+            exact-chinesechess-armhf-build:jessie \
+            sleep infinity
+
+      - name: Compile the app and run the smoke test
+        run: |
+          docker exec exact-chinesechess-armhf-builder /bin/bash -lc \
+            "make clean && make exact-chinesechess smoke-test && ./smoke-test"
+
+      - name: Show the baked-in minimum kernel (must say 2.6.32, NOT 3.2.0)
+        run: |
+          docker exec exact-chinesechess-armhf-builder \
+            /bin/bash -lc "file exact-chinesechess"
+
+      - name: Package the extension (app + bundled old-glibc libs, no Pikafish)
+        env:
+          EXACT_CHINESECHESS_DOCKER_CONTAINER: exact-chinesechess-armhf-builder
+        run: ./package_extension.sh
+
+      - name: Upload the installable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-chinesechess-pw3
+          path: |
+            release/exact-chinesechess-extension.zip
+            release/SHA256SUMS
