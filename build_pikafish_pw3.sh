@@ -167,9 +167,13 @@ sed -i 's/-mfpu=neon/-mfpu=vfpv3/g' "$PIKAFISH_SRC/src/Makefile"
 mkdir -p "$OUT_DIR"
 echo "Building Pikafish ARCH=$ARCH (static) with kindlepw2 ..."
 make -C "$PIKAFISH_SRC/src" clean 2>/dev/null || true
+# -static makes the engine self-contained, but glibc 2.12's static libpthread
+# is only pulled in on demand and its thread/TLS setup then crashes (SIGSEGV)
+# when the engine spawns its thread pool at startup. --whole-archive forces
+# the complete libpthread into the binary, which fixes the crash.
 make -C "$PIKAFISH_SRC/src" -j"$JOBS" build \
     ARCH="$ARCH" COMP=gcc CXX="$CXX" CC="$CC" \
-    EXTRALDFLAGS="-static"
+    EXTRALDFLAGS="-static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive"
 
 [ -f "$PIKAFISH_SRC/src/pikafish" ] || { echo "ERROR: pikafish binary not produced." >&2; exit 1; }
 cp "$PIKAFISH_SRC/src/pikafish" "$OUT_DIR/pikafish"
