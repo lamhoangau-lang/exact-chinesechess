@@ -123,6 +123,9 @@ static GdkPixbuf *normalize_piece_pixbuf(GdkPixbuf *src, XiangqiSide side) {
     if (src == NULL) {
         return NULL;
     }
+    if (gdk_pixbuf_get_has_alpha(src)) {
+        return gdk_pixbuf_copy(src);
+    }
 
     if (gdk_pixbuf_get_has_alpha(src)) {
         rgba = gdk_pixbuf_copy(src);
