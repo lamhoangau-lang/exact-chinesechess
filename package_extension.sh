@@ -30,6 +30,16 @@ cp "$ROOT/extension/NOTICE.txt" "$EXT_ROOT/NOTICE.txt"
 cp "$ROOT/extension/README.md" "$EXT_ROOT/README-package.txt"
 cp "$ROOT/extension/PIKAFISH.txt" "$EXT_ROOT/PIKAFISH.txt"
 cp "$ROOT/extension/ASSETS.txt" "$EXT_ROOT/ASSETS.txt"
+# v35-plus extras: wrapper config and opening book
+if [ -f "$ROOT/extension/pikafish_config.txt" ]; then
+    cp "$ROOT/extension/pikafish_config.txt" "$EXT_ROOT/pikafish_config.txt"
+fi
+if [ -f "$ROOT/extension/BOOK.DAT" ]; then
+    cp "$ROOT/extension/BOOK.DAT" "$EXT_ROOT/BOOK.DAT"
+fi
+if [ -f "$ROOT/extension/README-v35-plus-easy-depth-config-watchdog.txt" ]; then
+    cp "$ROOT/extension/README-v35-plus-easy-depth-config-watchdog.txt" "$EXT_ROOT/README-v35-plus-easy-depth-config-watchdog.txt"
+fi
 for asset in board.png \
              r_k.png r_a.png r_b.png r_n.png r_r.png r_c.png r_p.png \
              b_k.png b_a.png b_b.png b_n.png b_r.png b_c.png b_p.png
@@ -53,6 +63,12 @@ fi
 if [ -n "$PIKAFISH_BIN" ] && [ -f "$PIKAFISH_BIN" ]; then
     cp "$PIKAFISH_BIN" "$EXT_ROOT/bin/armhf/pikafish"
     chmod 755 "$EXT_ROOT/bin/armhf/pikafish"
+
+    # v35-plus wrapper expects pikafish.real next to the wrapper.
+    if [ -f "$ROOT/bin/armhf/pikafish.real" ]; then
+        cp "$ROOT/bin/armhf/pikafish.real" "$EXT_ROOT/bin/armhf/pikafish.real"
+        chmod 755 "$EXT_ROOT/bin/armhf/pikafish.real"
+    fi
 
     if [ -n "$PIKAFISH_NNUE" ] && [ -f "$PIKAFISH_NNUE" ]; then
         cp "$PIKAFISH_NNUE" "$EXT_ROOT/bin/armhf/pikafish.nnue"

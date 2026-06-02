@@ -571,20 +571,46 @@ static const char *level_name(XiangqiAiLevel level) {
     return "Medium";
 }
 
-/* Kindle's e-ink window manager makes GtkComboBox drop-downs snap shut the
- * instant they open, so the Mode/Level selectors are plain buttons that cycle
- * through the choices on each tap instead. */
-static void mode_cycle_cb(GtkWidget *button, gpointer data) {
+/* Dropdown selectors for Mode and Level.
+ * v35-plus-dropdown-ui: replace the old cycle buttons with real GtkComboBox
+ * dropdown menus so the user can choose directly instead of tapping repeatedly.
+ */
+static GtkWidget *create_mode_dropdown(void) {
+    GtkWidget *combo = gtk_combo_box_new_text();
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Red");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Black");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "2P");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Demo");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), (int)app.mode);
+    return combo;
+}
+
+static GtkWidget *create_level_dropdown(void) {
+    GtkWidget *combo = gtk_combo_box_new_text();
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Easy");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Medium");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Hard");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), (int)app.level);
+    return combo;
+}
+
+static void mode_combo_changed_cb(GtkComboBox *combo, gpointer data) {
+    int active;
     (void)data;
-    app.mode = (AppMode)(((int)app.mode + 1) % 4);
-    gtk_button_set_label(GTK_BUTTON(button), mode_name(app.mode));
+    active = gtk_combo_box_get_active(combo);
+    if (active < 0 || active > 3 || active == (int)app.mode)
+        return;
+    app.mode = (AppMode)active;
     new_game();
 }
 
-static void level_cycle_cb(GtkWidget *button, gpointer data) {
+static void level_combo_changed_cb(GtkComboBox *combo, gpointer data) {
+    int active;
     (void)data;
-    app.level = (XiangqiAiLevel)(((int)app.level + 1) % 3);
-    gtk_button_set_label(GTK_BUTTON(button), level_name(app.level));
+    active = gtk_combo_box_get_active(combo);
+    if (active < 0 || active > 2 || active == (int)app.level)
+        return;
+    app.level = (XiangqiAiLevel)active;
     pikafish_uci_set_difficulty(&app.pikafish, app.level);
     maybe_schedule_ai();
     update_ui();
@@ -1148,13 +1174,13 @@ int main(int argc, char **argv) {
 
     settings = gtk_hbox_new(FALSE, 12);
     gtk_box_pack_start(GTK_BOX(vbox), settings, FALSE, FALSE, 0);
-    app.mode_combo = gtk_button_new_with_label(mode_name(app.mode));
+    app.mode_combo = create_mode_dropdown();
     app_apply_high_contrast(app.mode_combo);
-    g_signal_connect(app.mode_combo, "clicked", G_CALLBACK(mode_cycle_cb), NULL);
+    g_signal_connect(app.mode_combo, "changed", G_CALLBACK(mode_combo_changed_cb), NULL);
     labeled_combo(settings, "Mode", app.mode_combo);
-    app.level_combo = gtk_button_new_with_label(level_name(app.level));
+    app.level_combo = create_level_dropdown();
     app_apply_high_contrast(app.level_combo);
-    g_signal_connect(app.level_combo, "clicked", G_CALLBACK(level_cycle_cb), NULL);
+    g_signal_connect(app.level_combo, "changed", G_CALLBACK(level_combo_changed_cb), NULL);
     labeled_combo(settings, "Level", app.level_combo);
     app.moves_label = gtk_label_new("Moves: 0");
     gtk_box_pack_start(GTK_BOX(settings), app.moves_label, FALSE, FALSE, 8);
