@@ -86,10 +86,10 @@ static void toggle_history_cb(GtkWidget *widget, gpointer data) {
     app.history_visible = !app.history_visible;
     if (app.history_visible) {
         gtk_widget_show(app.history_sidebar);
-        gtk_button_set_label(GTK_BUTTON(app.history_toggle_button), "Hide Moves");
+        gtk_button_set_label(GTK_BUTTON(app.history_toggle_button), "Show Hint");
     } else {
         gtk_widget_hide(app.history_sidebar);
-        gtk_button_set_label(GTK_BUTTON(app.history_toggle_button), "Show Moves");
+        gtk_button_set_label(GTK_BUTTON(app.history_toggle_button), "Show Hint");
     }
     gtk_widget_queue_resize(app.board);
     gtk_widget_queue_draw(app.board);
@@ -571,49 +571,114 @@ static const char *level_name(XiangqiAiLevel level) {
     return "Medium";
 }
 
-/* Dropdown selectors for Mode and Level.
- * v35-plus-dropdown-ui: replace the old cycle buttons with real GtkComboBox
- * dropdown menus so the user can choose directly instead of tapping repeatedly.
+/* Kindle-safe popup selectors for Mode and Level.
+ * GtkComboBox drop-downs close immediately on some Kindle/e-ink firmwares.
+ * Instead, the main row stays as a normal button, and tapping it opens a
+ * simple modal page with large option buttons. This avoids the drop-down
+ * focus bug while still letting the user choose directly.
  */
-static GtkWidget *create_mode_dropdown(void) {
-    GtkWidget *combo = gtk_combo_box_new_text();
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Red");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Black");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "2P");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Demo");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), (int)app.mode);
-    return combo;
+static void popup_cancel_cb(GtkWidget *widget, gpointer data) {
+    (void)widget;
+    if (data != NULL) {
+        gtk_widget_destroy(GTK_WIDGET(data));
+    }
 }
 
-static GtkWidget *create_level_dropdown(void) {
-    GtkWidget *combo = gtk_combo_box_new_text();
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Easy");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Medium");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(combo), "Hard");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), (int)app.level);
-    return combo;
+static GtkWidget *create_picker_dialog(const char *title) {
+    GtkWidget *dialog;
+    GtkWidget *box;
+    GtkWidget *label;
+
+    dialog = gtk_dialog_new();
+    gtk_window_set_title(GTK_WINDOW(dialog), title);
+    gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+    gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(app.window));
+    gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_CENTER_ALWAYS);
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 420, 360);
+    gtk_container_set_border_width(GTK_CONTAINER(dialog), 12);
+
+    box = gtk_vbox_new(FALSE, 10);
+    gtk_container_set_border_width(GTK_CONTAINER(box), 10);
+    gtk_box_pack_start(GTK_BOX(GTK_DIALOG(dialog)->vbox), box, TRUE, TRUE, 0);
+
+    label = gtk_label_new(title);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 4);
+
+    g_object_set_data(G_OBJECT(dialog), "picker_box", box);
+    return dialog;
 }
 
-static void mode_combo_changed_cb(GtkComboBox *combo, gpointer data) {
-    int active;
+static GtkWidget *picker_add_button(GtkWidget *dialog, const char *label, GCallback cb, gpointer data) {
+    GtkWidget *box;
+    GtkWidget *button;
+
+    box = GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "picker_box"));
+    button = gtk_button_new_with_label(label);
+    gtk_widget_set_size_request(button, 320, 58);
+    gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 4);
+    g_signal_connect(button, "clicked", cb, data);
+    return button;
+}
+
+static void mode_select_cb(GtkWidget *widget, gpointer data) {
+    AppMode selected = (AppMode)GPOINTER_TO_INT(data);
+    GtkWidget *dialog = gtk_widget_get_toplevel(widget);
+
+    if (selected != app.mode) {
+        app.mode = selected;
+        if (app.mode_combo != NULL) {
+            gtk_button_set_label(GTK_BUTTON(app.mode_combo), mode_name(app.mode));
+        }
+        gtk_widget_destroy(dialog);
+        new_game();
+    } else {
+        gtk_widget_destroy(dialog);
+    }
+}
+
+static void level_select_cb(GtkWidget *widget, gpointer data) {
+    XiangqiAiLevel selected = (XiangqiAiLevel)GPOINTER_TO_INT(data);
+    GtkWidget *dialog = gtk_widget_get_toplevel(widget);
+
+    if (selected != app.level) {
+        app.level = selected;
+        if (app.level_combo != NULL) {
+            gtk_button_set_label(GTK_BUTTON(app.level_combo), level_name(app.level));
+        }
+        pikafish_uci_set_difficulty(&app.pikafish, app.level);
+        gtk_widget_destroy(dialog);
+        maybe_schedule_ai();
+        update_ui();
+    } else {
+        gtk_widget_destroy(dialog);
+    }
+}
+
+static void mode_popup_cb(GtkWidget *button, gpointer data) {
+    GtkWidget *dialog;
+    (void)button;
     (void)data;
-    active = gtk_combo_box_get_active(combo);
-    if (active < 0 || active > 3 || active == (int)app.mode)
-        return;
-    app.mode = (AppMode)active;
-    new_game();
+
+    dialog = create_picker_dialog("Choose Mode");
+    picker_add_button(dialog, "Red",   G_CALLBACK(mode_select_cb), GINT_TO_POINTER(MODE_PLAY_RED));
+    picker_add_button(dialog, "Black", G_CALLBACK(mode_select_cb), GINT_TO_POINTER(MODE_PLAY_BLACK));
+    picker_add_button(dialog, "2P",    G_CALLBACK(mode_select_cb), GINT_TO_POINTER(MODE_TWO_PLAYER));
+    picker_add_button(dialog, "Demo",  G_CALLBACK(mode_select_cb), GINT_TO_POINTER(MODE_AI_DEMO));
+    picker_add_button(dialog, "Cancel", G_CALLBACK(popup_cancel_cb), dialog);
+    gtk_widget_show_all(dialog);
 }
 
-static void level_combo_changed_cb(GtkComboBox *combo, gpointer data) {
-    int active;
+static void level_popup_cb(GtkWidget *button, gpointer data) {
+    GtkWidget *dialog;
+    (void)button;
     (void)data;
-    active = gtk_combo_box_get_active(combo);
-    if (active < 0 || active > 2 || active == (int)app.level)
-        return;
-    app.level = (XiangqiAiLevel)active;
-    pikafish_uci_set_difficulty(&app.pikafish, app.level);
-    maybe_schedule_ai();
-    update_ui();
+
+    dialog = create_picker_dialog("Choose Level");
+    picker_add_button(dialog, "Easy",   G_CALLBACK(level_select_cb), GINT_TO_POINTER(XIANGQI_AI_EASY));
+    picker_add_button(dialog, "Medium", G_CALLBACK(level_select_cb), GINT_TO_POINTER(XIANGQI_AI_MEDIUM));
+    picker_add_button(dialog, "Hard",   G_CALLBACK(level_select_cb), GINT_TO_POINTER(XIANGQI_AI_HARD));
+    picker_add_button(dialog, "Cancel", G_CALLBACK(popup_cancel_cb), dialog);
+    gtk_widget_show_all(dialog);
 }
 
 static void history_first_cb(GtkWidget *widget, gpointer data) {
@@ -1168,23 +1233,23 @@ int main(int argc, char **argv) {
     gtk_box_pack_start(GTK_BOX(vbox), controls, FALSE, FALSE, 0);
     add_button(controls, "New", G_CALLBACK(new_game_cb));
     add_button(controls, "Undo", G_CALLBACK(undo_cb));
-    add_button(controls, "Save", G_CALLBACK(save_cb));
-    add_button(controls, "Load", G_CALLBACK(load_cb));
+    add_button(controls, "Book ON", G_CALLBACK(save_cb));
+    add_button(controls, "BookOff", G_CALLBACK(load_cb));
     add_button(controls, "Quit", G_CALLBACK(quit_cb));
 
     settings = gtk_hbox_new(FALSE, 12);
     gtk_box_pack_start(GTK_BOX(vbox), settings, FALSE, FALSE, 0);
-    app.mode_combo = create_mode_dropdown();
+    app.mode_combo = gtk_button_new_with_label(mode_name(app.mode));
     app_apply_high_contrast(app.mode_combo);
-    g_signal_connect(app.mode_combo, "changed", G_CALLBACK(mode_combo_changed_cb), NULL);
+    g_signal_connect(app.mode_combo, "clicked", G_CALLBACK(mode_popup_cb), NULL);
     labeled_combo(settings, "Mode", app.mode_combo);
-    app.level_combo = create_level_dropdown();
+    app.level_combo = gtk_button_new_with_label(level_name(app.level));
     app_apply_high_contrast(app.level_combo);
-    g_signal_connect(app.level_combo, "changed", G_CALLBACK(level_combo_changed_cb), NULL);
+    g_signal_connect(app.level_combo, "clicked", G_CALLBACK(level_popup_cb), NULL);
     labeled_combo(settings, "Level", app.level_combo);
     app.moves_label = gtk_label_new("Moves: 0");
     gtk_box_pack_start(GTK_BOX(settings), app.moves_label, FALSE, FALSE, 8);
-    app.history_toggle_button = gtk_button_new_with_label("Hide Moves");
+    app.history_toggle_button = gtk_button_new_with_label("Show Hint");
     gtk_box_pack_start(GTK_BOX(settings), app.history_toggle_button, FALSE, FALSE, 0);
     g_signal_connect(app.history_toggle_button, "clicked", G_CALLBACK(toggle_history_cb), NULL);
 
